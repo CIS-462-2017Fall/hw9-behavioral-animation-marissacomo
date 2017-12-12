@@ -135,6 +135,28 @@ void ABasicViewer::initializeGui()
     TwAddVarRW(mPlayerBar, "Motion", TW_TYPE_STDSTRING, &mFilename, "");
     TwAddVarRW(mPlayerBar, "Model", TW_TYPE_STDSTRING, &mModel, "");
     TwAddVarRW(mPlayerBar, "Enable skin", TW_TYPE_BOOLCPP, &AFBX::gDrawMesh, "");
+	
+	//TwAddVarRW(mPlayerBar, "gKNeighborhood", TW_TYPE_DOUBLE, &BehaviorController::gKNeighborhood, "");
+	
+	/* 
+
+	static double gKNeighborhood;
+	static double gAgentRadius;
+
+	static double gMass;
+	???
+	TwAddVarRW(mPlayerBar, "Enable skin", TW_TYPE_BOOLCPP, &AFBX::gDrawMesh, "");
+	static double KArrival;
+    static double KDeparture;
+    static double KNoise;
+    static double KWander;
+    static double KAvoid;
+    static double TAvoid;
+    static double RNeighborhood;
+    static double KSeparation;
+    static double KAlignment;
+    static double KCohesion;
+	*/
 
     mFilesBar = TwNewBar("File controls");
     TwDefine(" 'File controls' size='200 300' position='5 185' iconified=false fontresizable=false alpha=200");

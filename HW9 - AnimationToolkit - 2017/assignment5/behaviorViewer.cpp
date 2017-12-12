@@ -84,6 +84,12 @@ void BehaviorViewer::initializeGui()
 	TwAddButton(m_TwBehaviorBar, "Reset", onResetCb, this, "");
 
 	//TODO: Add your code here to create additional GUI Variables
+	TwAddVarRW(m_TwBehaviorBar, "gKNeighborhood", TW_TYPE_DOUBLE, &BehaviorController::gKNeighborhood, "");
+	TwAddVarRW(m_TwBehaviorBar, "gAgentRadius", TW_TYPE_DOUBLE, &BehaviorController::gAgentRadius, "");
+	TwAddVarRW(m_TwBehaviorBar, "KArrival", TW_TYPE_DOUBLE, &BehaviorController::KArrival, "");
+	TwAddVarRW(m_TwBehaviorBar, "KWander", TW_TYPE_DOUBLE, &BehaviorController::KWander, "");
+
+
 }
 
 

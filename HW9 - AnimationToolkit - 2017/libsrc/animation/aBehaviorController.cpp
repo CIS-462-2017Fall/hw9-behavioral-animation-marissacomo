@@ -17,9 +17,9 @@ double BehaviorController::gMaxAngularSpeed = 200.0;
 double BehaviorController::gMaxForce = 2000.0;  
 double BehaviorController::gMaxTorque = 2000.0;
 double BehaviorController::gKNeighborhood = 500.0;   
-double BehaviorController::gOriKv = 1.0;    
-double BehaviorController::gOriKp = 1.0;  
-double BehaviorController::gVelKv = 1.0;    
+double BehaviorController::gOriKv = 32.0; // math done #3
+double BehaviorController::gOriKp = 256.0;   // math done #3
+double BehaviorController::gVelKv = 10.0;   // math done #3
 double BehaviorController::gAgentRadius = 80.0;  
 double BehaviorController::gMass = 1;
 double BehaviorController::gInertia = 1;
@@ -147,38 +147,56 @@ void BehaviorController::sense(double deltaT)
 void BehaviorController::control(double deltaT)
 // Given the active behavior this function calculates a desired velocity vector (Vdesired).  
 // The desired velocity vector is then used to compute the desired speed (vd) and direction (thetad) commands
-
 {
-
 	if (mpActiveBehavior)
 	{ 
+
 		m_Vdesired = mpActiveBehavior->calcDesiredVel(this);
 		m_Vdesired[1] = 0;
 
 		//  force and torque inputs are computed from vd and thetad as follows:
 		//              Velocity P controller : force = mass * Kv * (vd - v)
-		//              Heading PD controller : torque = Inertia * (-Kv * thetaDot -Kp * (thetad - theta))
+		//              Heading PD controller : torque = Inertia * (Kv * thetaDot -Kp * (thetad - theta))
 		//  where the values of the gains Kv and Kp are different for each controller
 
 		// TODO: insert your code here to compute m_force and m_torque
 
+		// Velocity controller gains: force = m * Kv * (Vd - V)
+		// static double gVelKv;  // Velocity Kv gain
 
+		m_force = vec3(0, 0, gMass * gVelKv * (m_Vdesired.Length() - m_VelB[2])); // move along z
 
+		double deltaTheta = m_thetad - m_Euler[1];
+		ClampAngle(deltaTheta);
 
+		m_torque = vec3(0, gInertia * (-gOriKv * m_state[3][1]  + (gOriKp * (deltaTheta))), 0); // rotate y
 
+		m_vd = m_Vdesired.Length();
 
+		m_thetad = atan2(m_Vdesired[2], m_Vdesired[0]);
+		
 
-
-
-
-
-
+		if (m_force.Length() > gMaxForce)
+		{
+			m_force = m_force.Normalize() * gMaxForce;
+		}
+		
+		// //Heading controller gains: torque = I * ( -Kv * thetaDot - Kp * theta + Kp * thetad)
+		// static double gOriKv;  // Orientation Kv gain
+		// static double gOriKp;  // Orientation Kp gain
+		
+		if (m_torque.Length() > gMaxTorque)
+		{
+			m_torque = m_torque.Normalize() * gMaxTorque;
+		}
 
 		// when agent desired agent velocity and actual velocity < 2.0 then stop moving
 		if (m_vd < 2.0 &&  m_state[VEL][_Z] < 2.0)
 		{
 			m_force[2] = 0.0;
 			m_torque[1] = 0.0;
+			m_state[VEL] = 0.0;
+			m_state[AVEL] = 0.0;
 		}
 	}
 	else
@@ -206,16 +224,16 @@ void BehaviorController::computeDynamics(vector<vec3>& state, vector<vec3>& cont
 // Compute stateDot vector given the control input and state vectors
 //  This function sets derive vector to appropriate values after being called
 {
-	vec3& force = controlInput[0];
-	vec3& torque = controlInput[1];
+	vec3& force = controlInput[0]; // m_controlInput[0] = m_force = [force_x 0 force_z]T for the 2D planar case
+	vec3& torque = controlInput[1]; // m_controlInput[1] = m_torque = [0 torque_y 0]T for the 2D planar case
 
 	// Compute the stateDot vector given the values of the current state vector and control input vector
-	// TODO: add your code here
-
-
-
-
-
+	m_stateDot[0] = vec3(m_VelB[2] * cos(m_Euler[1]), 0, m_VelB[2] * sin(m_Euler[1]));  //vec3(m_state[2][2] * cos(state[1][1]), 0, m_state[2][2] * sin(m_state[1][1]));  
+	m_stateDot[1] = m_AVelB;  // m_state[2]; // m_VelB
+	m_stateDot[2] = force / gMass;  // body acceleration = [ accelx 0 accelz]T for the 2D planar case 
+	m_stateDot[3] = torque / gInertia;
+	//m_Vel0 = m_stateDot[0];
+	//m_AVelB = m_stateDot[3];
 }
 
 void BehaviorController::updateState(float deltaT, int integratorType)
@@ -224,27 +242,92 @@ void BehaviorController::updateState(float deltaT, int integratorType)
 	//  this should be similar to what you implemented in the particle system assignment
 
 	// TODO: add your code here
-	
+	//computeDynamics(m_state, m_controlInput, m_stateDot, deltaT);
+	// compute Xdot(t) and update the state to  produce x(t + deltaT) using Euler integration
+	switch (integratorType)
+	{
+		case 0:
+		// Add your code here
+			for (int i = 0; i < m_state.size(); i++)
+			{
+				m_state[i] = m_state[i] + m_stateDot[i] * deltaT;
+			}
+			break;
 
+		case 1:
+		{
+			// Add your code here
+			// Depending upon the type of external forces involved 
+			// you can compute Vdot(tk + 1) assuming f(tk + 1) is a function of x(tk + 1) or v(tk + 1).
+			vector<vec3> temp;//xp tk+1
+			vector<vec3> tempDot;
 
+			for (int i = 0; i < m_state.size(); i++)
+			{
+				temp.push_back(m_state[i] + m_stateDot[i] * deltaT);
+				tempDot.push_back(0.0);
+			}
 
+			computeDynamics(temp, m_controlInput, tempDot, deltaT); // prediction
 
-
-
+			for (int i = 0; i < m_state.size(); i++)
+			{
+				vec3 d1 = m_stateDot[i]; // tk
+				vec3 d2 = tempDot[i]; // tk+1
+				m_state[i] = m_state[i] + (deltaT / 2) * (d1 + d2);
+			}
+			break;
+		}
+	}
 
 	//  given the new values in m_state, these are the new component state values 
+	//ClampAngle(m_state[ORI]);
+	
 	m_Pos0 = m_state[POS];
 	m_Euler = m_state[ORI];
 	m_VelB = m_state[VEL];
 	m_AVelB = m_state[AVEL];
+	//m_Vel0 = m_stateDot[POS];
+
+	m_Vel0 = m_stateDot[0];
 
 	//  Perform validation check to make sure all values are within MAX values
 	// TODO: add your code here
+	if (m_VelB.Length() > gMaxSpeed)
+	{
+		m_VelB = m_VelB.Normalize() *gMaxSpeed;
+		m_state[VEL] = gMaxSpeed;
+	}
+	if (m_AVelB.Length() > gMaxAngularSpeed)
+	{
+		m_AVelB = m_AVelB.Normalize() *gMaxAngularSpeed;
+		m_state[AVEL] = gMaxAngularSpeed;
+	}
+	if (m_force.Length() > gMaxForce)
+	{
+		m_force = m_force.Normalize()  *gMaxForce;
+	}
+	if (m_torque.Length() > gMaxTorque)
+	{
+		m_torque = m_torque.Normalize()  *gMaxTorque;
+	}
 
+	//if (m_VelB[0] > gMaxSpeed)
+	//{
+	//	m_VelB[0] = gMaxSpeed;
+	//	m_state[VEL][0] =gMaxSpeed;
+	//}
+	//if (m_VelB[2] > gMaxSpeed)
+	//{
+	//	m_VelB[2] = gMaxSpeed;
+	//	m_state[VEL][2] = gMaxSpeed;
+	//}
 
-
-
-
+	//if (m_AVelB[1] > gMaxAngularSpeed)
+	//{
+	//	m_AVelB[1] = gMaxAngularSpeed;
+	//	m_state[AVEL][1] = gMaxAngularSpeed;
+	//}
 
 
 
@@ -282,9 +365,6 @@ void BehaviorController::setTarget(AJoint& target)
 		BehaviorType index = (BehaviorType) i;
 		m_BehaviorList[index]->setTarget(m_pBehaviorTarget);
 	}
-
-
-
 }
 
 void BehaviorController::setActiveBehavior(Behavior* pBehavior)
@@ -297,7 +377,6 @@ void BehaviorController::setActiveBehaviorType(BehaviorType type)
 	m_BehaviorType = type;
 	Behavior* pActiveBehavior = m_BehaviorList[type];
 	setActiveBehavior(pActiveBehavior);
-
 }
 
 void BehaviorController::display()
